@@ -20,7 +20,7 @@ model Vendedor {
 model Venda {
   id         Int      @id @default(autoincrement())
   valor      Float
-  data       DateTime
+  mes        String
   vendedorId Int
   vendedor   Vendedor @relation(fields: [vendedorId], references: [id])
 }
