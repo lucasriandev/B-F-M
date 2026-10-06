@@ -1,0 +1,33 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// Exercício 1: gráfico de vendas
+model Vendedor {
+  id     Int     @id @default(autoincrement())
+  nome   String
+  vendas Venda[]
+}
+
+model Venda {
+  id         Int      @id @default(autoincrement())
+  valor      Float
+  data       DateTime
+  vendedorId Int
+  vendedor   Vendedor @relation(fields: [vendedorId], references: [id])
+}
+
+// Exercício 3: vigia de estoque
+model Produto {
+  id         Int    @id @default(autoincrement())
+  nome       String
+  quantidade Int
+}
