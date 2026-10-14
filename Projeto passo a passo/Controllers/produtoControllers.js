@@ -12,9 +12,8 @@ const get = async (req, res) => {
 };
 
 const post = async (req, res) => {
-  const mensagemValidada = mensagemSchema.parse(req.body);
-
   try {
+    const mensagemValidada = mensagemSchema.parse(req.body);
     const novoProduto = await prisma.produto.create({
       data: {
         nome: mensagemValidada.nome,
