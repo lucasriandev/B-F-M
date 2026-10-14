@@ -1,5 +1,8 @@
 const express = require("express");
 const router = express.Router();
-const mensagemControllers = require("../Controllers/vendasControllers");
+const VendasController = require("../Controllers/vendasControllers");
+
+router.post("/", VendasController.post);
+router.get("/", VendasController.get);
 
 module.exports = router;
