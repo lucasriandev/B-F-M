@@ -8,12 +8,19 @@ const vendaSchema = z.object({
 });
 
 const get = async (req, res) => {
-
-  const todasVendas = await prisma.venda.findMany({
+  /*const todasVendas = await prisma.venda.findMany({
     include: { vendedor: true },
   });
 
-  res.status(200).json({ detalhe: todasVendas.length, dados: todasVendas });
+  res.status(200).json({ detalhe: todasVendas.length, dados: todasVendas });*/
+
+  const resultado = await prisma.venda.groupBy({
+    by: ["mes"],
+    _sum: {
+      valor: true,
+    },
+  });
+  res.status(200).json({ detalhe: resultado.length, dados: resultado });
 };
 
 const post = async (req, res) => {
