@@ -1,4 +1,3 @@
-const { z } = require('zod')
 const prisma = require('../prisma')
 
 const vendasPorMes = async (req, res) => {
@@ -8,7 +7,15 @@ const vendasPorMes = async (req, res) => {
             valor: true
         }
     })
-    res.status(200).json({ vendasPorMes: relatorio })
+
+    const relatorioFinal = relatorio.map(item => {
+        return {
+            mes: item.mes,
+            total: item._sum.valor
+        }
+    })
+
+    res.json(relatorioFinal)
 }
 
 module.exports = { vendasPorMes }
