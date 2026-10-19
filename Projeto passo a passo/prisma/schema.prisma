@@ -23,6 +23,17 @@ model Venda {
   mes        String
   vendedorId Int
   vendedor   Vendedor @relation(fields: [vendedorId], references: [id])
+  itens      ItemVenda[]
+}
+
+// Tabela intermediária: liga uma Venda a vários Produtos
+model ItemVenda {
+  id         Int     @id @default(autoincrement())
+  quantidade Int
+  vendaId    Int
+  produtoId  Int
+  venda      Venda   @relation(fields: [vendaId], references: [id])
+  produto    Produto @relation(fields: [produtoId], references: [id])
 }
 
 // Exercício 3: vigia de estoque
@@ -30,4 +41,5 @@ model Produto {
   id         Int    @id @default(autoincrement())
   nome       String
   quantidade Int
+  itens      ItemVenda[]
 }
