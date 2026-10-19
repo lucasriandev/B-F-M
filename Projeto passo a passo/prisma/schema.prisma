@@ -11,27 +11,30 @@ datasource db {
 }
 
 // Exercício 1: gráfico de vendas
+// Vendedor: quem realiza as vendas
 model Vendedor {
-  id     Int     @id @default(autoincrement())
+  id     Int     @id @default(autoincrement()) // chave primária, cresce sozinha (1, 2, 3...)
   nome   String
-  vendas Venda[]
+  vendas Venda[] // lista de vendas deste vendedor (não é coluna, só navegação da relação)
 }
 
+// Venda: uma venda feita por UM vendedor, com vários itens
 model Venda {
   id         Int      @id @default(autoincrement())
-  valor      Float
-  mes        String
-  vendedorId Int
+  valor      Float // valor total da venda
+  mes        String // mês em que ocorreu (usado no gráfico)
+  vendedorId Int // coluna real no banco: id do vendedor (chave estrangeira)
+  // relação: liga vendedorId ao id da tabela Vendedor
   vendedor   Vendedor @relation(fields: [vendedorId], references: [id])
-  itens      ItemVenda[]
+  itens      ItemVenda[] // lista de itens desta venda (não é coluna)
 }
 
 // Tabela intermediária: liga uma Venda a vários Produtos
 model ItemVenda {
   id         Int     @id @default(autoincrement())
-  quantidade Int
-  vendaId    Int
-  produtoId  Int
+  quantidade Int // quantas unidades deste produto foram vendidas
+  vendaId    Int // chave estrangeira: de qual venda é este item
+  produtoId  Int // chave estrangeira: qual produto foi vendido
   venda      Venda   @relation(fields: [vendaId], references: [id])
   produto    Produto @relation(fields: [produtoId], references: [id])
 }
@@ -40,6 +43,6 @@ model ItemVenda {
 model Produto {
   id         Int    @id @default(autoincrement())
   nome       String
-  quantidade Int
-  itens      ItemVenda[]
+  quantidade Int // estoque atual (diminui a cada venda)
+  itens      ItemVenda[] // vendas em que este produto apareceu (não é coluna)
 }
