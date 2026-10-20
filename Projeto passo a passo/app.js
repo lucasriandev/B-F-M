@@ -10,6 +10,7 @@ const rotasVendedores = require("./Routes/vendedoresRoutes");
 const rotasProdutos = require("./Routes/produtoRoutes");
 const rotasVendas = require("./Routes/vendasRoutes");
 const rotasRelatorios = require("./Routes/relatorioRoutes");
+const pokemonCliente = require("./Routes/clienteExpressRoutes");
 
 // Middlewares: rodam em toda requisição, antes das rotas
 app.use(cors()); // libera acesso de outras origens
@@ -20,6 +21,7 @@ app.use("/vendedores", rotasVendedores); // ex.: GET /vendedores
 app.use("/produtos", rotasProdutos); // ex.: GET /produtos
 app.use("/vendas", rotasVendas); // ex.: POST /vendas
 app.use("/relatorio", rotasRelatorios); // ex.: GET /relatorio/vendas-por-mes
+app.use("/pokemon", pokemonCliente);
 
 // Liga o servidor na porta 3000
 app.listen(3000, () => {
