@@ -27,3 +27,5 @@ app.use("/pokemon", pokemonCliente);
 app.listen(3000, () => {
   console.log("Servidor ativo!");
 });
+
+//rotas dos pokemon indepentende
