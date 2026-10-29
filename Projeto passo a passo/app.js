@@ -66,3 +66,4 @@ app.listen(3000, () => {
 });
 
 //rotas dos pokemon indepentende
+//revisando
