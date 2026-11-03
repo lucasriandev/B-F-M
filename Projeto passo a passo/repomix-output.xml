@@ -1,0 +1,708 @@
+This file is a merged representation of the entire codebase, combined into a single document by Repomix.
+
+<file_summary>
+This section contains a summary of this file.
+
+<purpose>
+This file contains a packed representation of the entire repository's contents.
+It is designed to be easily consumable by AI systems for analysis, code review,
+or other automated processes.
+</purpose>
+
+<file_format>
+The content is organized as follows:
+1. This summary section
+2. Repository information
+3. Directory structure
+4. Repository files (if enabled)
+5. Multiple file entries, each consisting of:
+  - File path as an attribute
+  - Full contents of the file
+</file_format>
+
+<usage_guidelines>
+- This file should be treated as read-only. Any changes should be made to the
+  original repository files, not this packed version.
+- When processing this file, use the file path to distinguish
+  between different files in the repository.
+- Be aware that this file may contain sensitive information. Handle it with
+  the same level of security as you would the original repository.
+</usage_guidelines>
+
+<notes>
+- Some files may have been excluded based on .gitignore rules and Repomix's configuration
+- Binary files are not included in this packed representation. Please refer to the Repository Structure section for a complete list of file paths, including binary files
+- Files matching patterns in .gitignore are excluded
+- Files matching default ignore patterns are excluded
+- Files are sorted by Git change count (files with more changes are at the bottom)
+</notes>
+
+</file_summary>
+
+<directory_structure>
+Controllers/
+  clienteExpressControllers.js
+  produtoControllers.js
+  relatorioControllers.js
+  vendasControllers.js
+  vendedoresControllers.js
+prisma/
+  migrations/
+    20261006155821_init/
+      migration.sql
+    20261006160534_venda_mes_string/
+      migration.sql
+    20261019144350_add_item_venda/
+      migration.sql
+    migration_lock.toml
+  dev.db
+  index.js
+  schema.prisma
+Routes/
+  clienteExpressRoutes.js
+  produtoRoutes.js
+  relatorioRoutes.js
+  vendasRoutes.js
+  vendedoresRoutes.js
+.gitignore
+app.js
+package.json
+prisma.config.ts
+</directory_structure>
+
+<files>
+This section contains the contents of the repository's files.
+
+<file path="Controllers/clienteExpressControllers.js">
+const get = async (req, res) => {
+  const urlPokemon = "https://pokeapi.co/api/v2/pokemon";
+
+  try {
+    const resposta = await fetch(urlPokemon);
+    const dados = await resposta.json();
+
+    const filtro = await Promise.all(
+      dados.results.map(async (p) => {
+        const detalhes = await (await fetch(p.url)).json();
+        return {
+          nome: p.name,
+          peso: detalhes.weight
+        }
+      })
+    )
+
+
+    res.status(200).json({ dados: filtro });
+  } catch (error) {
+    res.status(404).json({ error: "pokemon nao encontrado!" });
+  }
+};
+
+module.exports = {
+  get,
+};
+</file>
+
+<file path="Controllers/produtoControllers.js">
+// zod: valida o formato dos dados recebidos
+const { z } = require("zod");
+// prisma: conexão com o banco de dados
+const prisma = require("../prisma");
+
+// Molde do body do POST /produtos
+const mensagemSchema = z.object({
+  nome: z.string().min(3, "Produto precisa ter no minino tres letras!"), // nome com 3+ letras
+  quantidade: z.number().int().positive("Quantidade precisa ser positiva!"), // estoque: inteiro > 0
+});
+
+// GET /produtos -> lista todos os produtos
+const get = async (req, res) => {
+  const TodosProdutos = await prisma.produto.findMany(); // busca todos no banco
+  res.status(200).json({ detalhe: TodosProdutos.length, dados: TodosProdutos });
+};
+
+// POST /produtos -> cria um produto novo com seu estoque inicial
+const post = async (req, res) => {
+  try {
+    // Valida o body; se estiver errado, lança erro e cai no catch
+    const mensagemValidada = mensagemSchema.parse(req.body);
+    // Cria o produto no banco
+    const novoProduto = await prisma.produto.create({
+      data: {
+        nome: mensagemValidada.nome,
+        quantidade: mensagemValidada.quantidade,
+      },
+    });
+    // 201 = criado com sucesso
+    res
+      .status(201)
+      .json({ detalhe: "Post de produto feito!", dados: novoProduto });
+  } catch (error) {
+    // Qualquer erro (validação ou banco) cai aqui
+    res.status(404).json({ Error: "Erro no post de produto!" });
+  }
+};
+
+// Exporta as funções para as rotas usarem
+module.exports = {
+  get,
+  post,
+};
+</file>
+
+<file path="Controllers/relatorioControllers.js">
+// prisma: conexão com o banco de dados
+const prisma = require('../prisma')
+
+// GET /relatorio/vendas-por-mes -> total vendido em cada mês
+const vendasPorMes = async (req, res) => {
+    // Agrupa as vendas por mês e soma o valor de cada grupo
+    // Resultado bruto: [{ mes: "Janeiro", _sum: { valor: 350 } }, ...]
+    const relatorio = await prisma.venda.groupBy({
+        by: ['mes'],
+        _sum: {
+            valor: true
+        }
+    })
+
+    // Reformata cada item para um formato mais simples: { mes, total }
+    const relatorioFinal = relatorio.map(item => {
+        return {
+            mes: item.mes,
+            total: item._sum.valor
+        }
+    })
+
+    // Devolve a lista já formatada
+    res.json(relatorioFinal)
+}
+
+// Exporta a função para a rota usar
+module.exports = { vendasPorMes }
+</file>
+
+<file path="Controllers/vendasControllers.js">
+// zod: biblioteca que valida se os dados recebidos no body têm o formato certo
+const { z } = require("zod");
+// prisma: conexão com o banco de dados (arquivo prisma/index.js)
+const prisma = require("../prisma");
+
+// Define o "molde" que o body do POST /vendas precisa seguir
+const vendaSchema = z.object({
+  valor: z.number().positive(), // número maior que zero
+  mes: z.string().min(3), // texto com no mínimo 3 letras
+  vendedorId: z.number().int().positive(), // id do vendedor (inteiro positivo)
+  // itens: array (lista) de produtos vendidos nesta venda
+  itens: z
+    .array(
+      // cada item da lista precisa ter este formato:
+      z.object({
+        produtoId: z.number().int().positive(), // qual produto foi vendido
+        quantidade: z.number().int().positive(), // quantas unidades
+      })
+    )
+    .min(1, "A venda precisa ter ao menos um item!"), // não aceita lista vazia
+});
+
+// GET /vendas -> lista todas as vendas
+const get = async (req, res) => {
+  // findMany busca todas as vendas.
+  // include traz junto os dados relacionados:
+  //   vendedor -> o vendedor que fez a venda
+  //   itens -> os itens da venda, e dentro de cada item o produto
+  const todasVendas = await prisma.venda.findMany({
+    include: { vendedor: true, itens: { include: { produto: true } } },
+  });
+
+  // groupBy agrupa as vendas por mês e soma o campo valor de cada grupo
+  // (usado para alimentar o gráfico de vendas por mês)
+  const resultado = await prisma.venda.groupBy({
+    by: ["mes"],
+    _sum: {
+      valor: true,
+    },
+  });
+
+  // Responde 200 (OK) com a quantidade, a lista e o total por mês
+  res
+    .status(200)
+    .json({
+      detalhe: todasVendas.length,
+      dados: todasVendas,
+      vendaPorMes: resultado,
+    });
+};
+
+// POST /vendas -> cria uma venda nova e abate o estoque dos produtos
+const post = async (req, res) => {
+  try {
+    // 1) Valida o body com o molde acima. Se estiver errado, lança erro e cai no catch
+    const mensagemValidada = vendaSchema.parse(req.body);
+
+    // 2) Confere se o vendedor informado existe no banco
+    const vendedorExiste = await prisma.vendedor.findUnique({
+      where: { id: mensagemValidada.vendedorId },
+    });
+
+    // Se não existe, responde 404 e para a função (return)
+    if (!vendedorExiste) {
+      return res.status(404).json({ error: "Vendedor nao existe!" });
+    }
+
+    // 3) Monta uma lista só com os ids dos produtos. Ex.: [1, 3]
+    const produtoIds = mensagemValidada.itens.map((item) => item.produtoId);
+
+    // Set remove repetidos. Se o tamanho mudou, o mesmo produto veio 2 vezes
+    if (new Set(produtoIds).size !== produtoIds.length) {
+      return res
+        .status(400)
+        .json({ error: "Produto repetido na venda! Some as quantidades." });
+    }
+
+    // 4) Busca no banco todos os produtos cujo id está na lista (in)
+    const produtosExistem = await prisma.produto.findMany({
+      where: {
+        id: {
+          in: produtoIds,
+        },
+      },
+    });
+
+    // Se encontrou menos produtos do que foram pedidos, algum id não existe
+    if (produtosExistem.length !== mensagemValidada.itens.length) {
+      return res.status(404).json({ error: "Um ou mais produtos nao existe!" });
+    }
+
+    // 5) Confere o estoque de cada item
+    for (const item of mensagemValidada.itens) {
+      // acha o produto do banco que corresponde a este item
+      const produto = produtosExistem.find((p) => p.id === item.produtoId);
+      // se pediu mais do que tem em estoque, recusa a venda
+      if (produto.quantidade < item.quantidade) {
+        return res.status(400).json({
+          error: `Estoque insuficiente para ${produto.nome}! Disponivel: ${produto.quantidade}`,
+        });
+      }
+    }
+
+    // 6) $transaction executa várias operações juntas: ou todas dão certo,
+    // ou nenhuma é salva. O resultado volta numa lista na mesma ordem;
+    // [novaVenda] pega só o primeiro resultado (a venda criada)
+    const [novaVenda] = await prisma.$transaction([
+      // Operação 1: cria a venda
+      prisma.venda.create({
+        data: {
+          valor: mensagemValidada.valor,
+          mes: mensagemValidada.mes,
+          vendedorId: mensagemValidada.vendedorId,
+          // itens.create cria os ItemVenda já ligados a esta venda
+          // (o vendaId é preenchido sozinho pelo Prisma)
+          itens: {
+            create: mensagemValidada.itens.map((item) => ({
+              produtoId: item.produtoId,
+              quantidade: item.quantidade,
+            })),
+          },
+        },
+        include: { itens: true }, // devolve a venda já com os itens
+      }),
+      // Operações seguintes: uma atualização de estoque por item.
+      // O "..." espalha a lista de operações dentro do array da transação
+      ...mensagemValidada.itens.map((item) =>
+        prisma.produto.update({
+          where: { id: item.produtoId },
+          // decrement subtrai direto no banco: estoque = estoque - quantidade
+          data: { quantidade: { decrement: item.quantidade } },
+        })
+      ),
+    ]);
+
+    // 7) Tudo certo: responde 201 (Created) com a venda criada
+    res
+      .status(201)
+      .json({ detalhe: "Venda criada com sucesso", dados: novaVenda });
+  } catch (error) {
+    // Qualquer erro (validação do zod, banco, etc.) cai aqui
+    return res.status(400).json({ error: "Erro ao criar venda" });
+  }
+};
+
+// Exporta as funções para as rotas (Routes/vendasRoutes.js) usarem
+module.exports = { get, post };
+</file>
+
+<file path="Controllers/vendedoresControllers.js">
+// zod: valida o formato dos dados recebidos
+const { z } = require("zod");
+// prisma: conexão com o banco de dados
+const prisma = require("../prisma");
+
+// Molde do body do POST /vendedores: precisa de um nome com 3+ letras
+const mensagemSchema = z.object({
+  nome: z.string().min(3, "Vendedor precisa ter um nome maior!"),
+});
+
+// GET /vendedores -> lista todos os vendedores
+const get = async (req, res) => {
+  const vendedores = await prisma.vendedor.findMany(); // busca todos no banco
+  res.status(200).json({ detalhe: vendedores.length, dados: vendedores });
+};
+
+// POST /vendedores -> cria um vendedor novo
+const post = async (req, res) => {
+  // Valida o body. Atenção: está fora do try, então se falhar o erro não é tratado aqui
+  const mensagemValidade = mensagemSchema.parse(req.body);
+
+  try {
+    // Cria o vendedor no banco com o nome validado
+    const novoVendedor = await prisma.vendedor.create({
+      data: {
+        nome: mensagemValidade.nome,
+      },
+    });
+    // 201 = criado com sucesso
+    res.status(201).json({ detalhe: "Sucesso no post", dados: novoVendedor });
+  } catch (error) {
+    // Se o banco falhar, responde com erro
+    res.status(404).json({ Error: "Erro no post" });
+  }
+};
+
+// Exporta as funções para as rotas usarem
+module.exports = {
+  get,
+  post,
+};
+</file>
+
+<file path="prisma/migrations/20261006155821_init/migration.sql">
+-- CreateTable
+CREATE TABLE "Vendedor" (
+    "id" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+    "nome" TEXT NOT NULL
+);
+
+-- CreateTable
+CREATE TABLE "Venda" (
+    "id" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+    "valor" REAL NOT NULL,
+    "data" DATETIME NOT NULL,
+    "vendedorId" INTEGER NOT NULL,
+    CONSTRAINT "Venda_vendedorId_fkey" FOREIGN KEY ("vendedorId") REFERENCES "Vendedor" ("id") ON DELETE RESTRICT ON UPDATE CASCADE
+);
+
+-- CreateTable
+CREATE TABLE "Produto" (
+    "id" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+    "nome" TEXT NOT NULL,
+    "quantidade" INTEGER NOT NULL
+);
+</file>
+
+<file path="prisma/migrations/20261006160534_venda_mes_string/migration.sql">
+/*
+  Warnings:
+
+  - You are about to drop the column `data` on the `Venda` table. All the data in the column will be lost.
+  - Added the required column `mes` to the `Venda` table without a default value. This is not possible if the table is not empty.
+
+*/
+-- RedefineTables
+PRAGMA defer_foreign_keys=ON;
+PRAGMA foreign_keys=OFF;
+CREATE TABLE "new_Venda" (
+    "id" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+    "valor" REAL NOT NULL,
+    "mes" TEXT NOT NULL,
+    "vendedorId" INTEGER NOT NULL,
+    CONSTRAINT "Venda_vendedorId_fkey" FOREIGN KEY ("vendedorId") REFERENCES "Vendedor" ("id") ON DELETE RESTRICT ON UPDATE CASCADE
+);
+INSERT INTO "new_Venda" ("id", "valor", "vendedorId") SELECT "id", "valor", "vendedorId" FROM "Venda";
+DROP TABLE "Venda";
+ALTER TABLE "new_Venda" RENAME TO "Venda";
+PRAGMA foreign_keys=ON;
+PRAGMA defer_foreign_keys=OFF;
+</file>
+
+<file path="prisma/migrations/20261019144350_add_item_venda/migration.sql">
+-- CreateTable
+CREATE TABLE "ItemVenda" (
+    "id" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+    "quantidade" INTEGER NOT NULL,
+    "vendaId" INTEGER NOT NULL,
+    "produtoId" INTEGER NOT NULL,
+    CONSTRAINT "ItemVenda_vendaId_fkey" FOREIGN KEY ("vendaId") REFERENCES "Venda" ("id") ON DELETE RESTRICT ON UPDATE CASCADE,
+    CONSTRAINT "ItemVenda_produtoId_fkey" FOREIGN KEY ("produtoId") REFERENCES "Produto" ("id") ON DELETE RESTRICT ON UPDATE CASCADE
+);
+</file>
+
+<file path="prisma/migrations/migration_lock.toml">
+# Please do not edit this file manually
+# It should be added in your version-control system (e.g., Git)
+provider = "sqlite"
+</file>
+
+<file path="prisma/index.js">
+// Carrega as variáveis do arquivo .env (ex.: DATABASE_URL)
+require("dotenv").config();
+// PrismaClient: a ferramenta que conversa com o banco de dados
+const { PrismaClient } = require("@prisma/client");
+
+// Cria UMA conexão com o banco, reaproveitada em todo o projeto
+const prisma = new PrismaClient();
+
+// Exporta para os controllers usarem com require("../prisma")
+module.exports = prisma;
+</file>
+
+<file path="prisma/schema.prisma">
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// Exercício 1: gráfico de vendas
+// Vendedor: quem realiza as vendas
+model Vendedor {
+  id     Int     @id @default(autoincrement()) // chave primária, cresce sozinha (1, 2, 3...)
+  nome   String
+  vendas Venda[] // lista de vendas deste vendedor (não é coluna, só navegação da relação)
+}
+
+// Venda: uma venda feita por UM vendedor, com vários itens
+model Venda {
+  id         Int      @id @default(autoincrement())
+  valor      Float // valor total da venda
+  mes        String // mês em que ocorreu (usado no gráfico)
+  vendedorId Int // coluna real no banco: id do vendedor (chave estrangeira)
+  // relação: liga vendedorId ao id da tabela Vendedor
+  vendedor   Vendedor @relation(fields: [vendedorId], references: [id])
+  itens      ItemVenda[] // lista de itens desta venda (não é coluna)
+}
+
+// Tabela intermediária: liga uma Venda a vários Produtos
+model ItemVenda {
+  id         Int     @id @default(autoincrement())
+  quantidade Int // quantas unidades deste produto foram vendidas
+  vendaId    Int // chave estrangeira: de qual venda é este item
+  produtoId  Int // chave estrangeira: qual produto foi vendido
+  venda      Venda   @relation(fields: [vendaId], references: [id])
+  produto    Produto @relation(fields: [produtoId], references: [id])
+}
+
+// Exercício 3: vigia de estoque
+model Produto {
+  id         Int    @id @default(autoincrement())
+  nome       String
+  quantidade Int // estoque atual (diminui a cada venda)
+  itens      ItemVenda[] // vendas em que este produto apareceu (não é coluna)
+}
+</file>
+
+<file path="Routes/clienteExpressRoutes.js">
+const express = require("express");
+const router = express.Router();
+
+const pokemonControllers = require("../Controllers/clienteExpressControllers");
+
+router.get("/", pokemonControllers.get);
+
+module.exports = router;
+</file>
+
+<file path="Routes/produtoRoutes.js">
+const express = require("express");
+// Router: mini-aplicação que agrupa as rotas de produtos
+const router = express.Router();
+// Importa as funções que fazem o trabalho de cada rota
+const produtosControllers = require("../Controllers/produtoControllers");
+
+// POST /produtos -> cria produto (o prefixo /produtos vem do app.js)
+router.post("/", produtosControllers.post);
+// GET /produtos -> lista produtos
+router.get("/", produtosControllers.get);
+
+// Exporta o router para o app.js registrar
+module.exports = router;
+</file>
+
+<file path="Routes/relatorioRoutes.js">
+const express = require('express');
+// Router: mini-aplicação que agrupa as rotas deste assunto
+const router = express.Router()
+// Importa as funções que fazem o trabalho de cada rota
+const relatorioController = require('../Controllers/relatorioControllers')
+
+// GET /relatorio/vendas-por-mes (o prefixo /relatorio vem do app.js)
+router.get('/vendas-por-mes', relatorioController.vendasPorMes)
+
+// Exporta o router para o app.js registrar
+module.exports = router
+</file>
+
+<file path="Routes/vendasRoutes.js">
+const express = require("express");
+// Router: mini-aplicação que agrupa as rotas de vendas
+const router = express.Router();
+// Importa as funções que fazem o trabalho de cada rota
+const VendasController = require("../Controllers/vendasControllers");
+
+// POST /vendas -> cria venda (o prefixo /vendas vem do app.js)
+router.post("/", VendasController.post);
+// GET /vendas -> lista vendas
+router.get("/", VendasController.get);
+
+// Exporta o router para o app.js registrar
+module.exports = router;
+</file>
+
+<file path="Routes/vendedoresRoutes.js">
+const express = require("express");
+// Router: mini-aplicação que agrupa as rotas de vendedores
+const router = express.Router();
+// Importa as funções que fazem o trabalho de cada rota
+const vendedoresControllers = require("../Controllers/vendedoresControllers");
+
+// POST /vendedores -> cria vendedor (o prefixo /vendedores vem do app.js)
+router.post("/", vendedoresControllers.post);
+// GET /vendedores -> lista vendedores
+router.get("/", vendedoresControllers.get);
+
+// Exporta o router para o app.js registrar
+module.exports = router;
+</file>
+
+<file path=".gitignore">
+node_modules
+# Keep environment variables out of version control
+.env
+
+/generated/prisma
+</file>
+
+<file path="app.js">
+// express: framework que cria o servidor e as rotas
+const express = require("express");
+// cors: permite que um front-end em outro endereço acesse esta API
+const cors = require("cors");
+// Cria a aplicação (o servidor)
+const app = express();
+
+// Importa os grupos de rotas de cada assunto
+const rotasVendedores = require("./Routes/vendedoresRoutes");
+const rotasProdutos = require("./Routes/produtoRoutes");
+const rotasVendas = require("./Routes/vendasRoutes");
+const rotasRelatorios = require("./Routes/relatorioRoutes");
+const pokemonCliente = require("./Routes/clienteExpressRoutes");
+
+// NOVO (Exercício 3): node-cron agenda tarefas que rodam sozinhas em horários definidos
+// (instalado com: npm install node-cron)
+const cron = require("node-cron");
+// NOVO: reaproveita a conexão do Prisma para consultar o banco dentro da tarefa
+const prisma = require("./prisma");
+
+// Middlewares: rodam em toda requisição, antes das rotas
+app.use(cors()); // libera acesso de outras origens
+app.use(express.json()); // transforma o JSON do body em objeto (req.body)
+
+// Registra cada grupo de rotas com seu prefixo de URL
+app.use("/vendedores", rotasVendedores); // ex.: GET /vendedores
+app.use("/produtos", rotasProdutos); // ex.: GET /produtos
+app.use("/vendas", rotasVendas); // ex.: POST /vendas
+app.use("/relatorio", rotasRelatorios); // ex.: GET /relatorio/vendas-por-mes
+app.use("/pokemon", pokemonCliente);
+
+// NOVO (Exercício 3): tarefa agendada (job) de alerta de estoque baixo.
+// cron.schedule(expressão, função): a expressão tem 5 campos:
+//   minuto hora dia-do-mês mês dia-da-semana
+// "* * * * *" = todo campo com "qualquer valor" => executa a CADA MINUTO
+// (bom para testar localmente; em produção usaríamos algo como "0 8 * * *", todo dia às 8h)
+cron.schedule("* * * * *", async () => {
+  // async: porque dentro usamos await para esperar a resposta do banco
+
+  // try/catch: se a consulta falhar (ex.: banco fora do ar), o erro é capturado
+  // aqui e registrado, em vez de derrubar o processo. Na próxima execução
+  // (1 minuto depois) a tarefa tenta de novo automaticamente.
+  try {
+    // findMany busca VÁRIOS registros; where filtra no próprio banco.
+    // { lt: 5 } = "less than" (menor que 5), ou seja, estritamente abaixo de 5.
+    const produtosBaixos = await prisma.produto.findMany({
+      where: { quantidade: { lt: 5 } },
+    });
+
+    // Só avisa se o array tiver itens (length > 0)
+    if (produtosBaixos.length > 0) {
+      // Percorre cada produto em risco e imprime o aviso no terminal
+      produtosBaixos.forEach((produto) => {
+        console.log(`Aviso: O produto ${produto.nome} está quase a esgotar!`);
+      });
+    }
+  } catch (erro) {
+    // Registra a falha; a tarefa continua agendada para o próximo minuto
+    console.error("Erro ao verificar o estoque:", erro.message);
+  }
+});
+
+// Liga o servidor na porta 3000
+app.listen(3000, () => {
+  console.log("Servidor ativo!");
+});
+
+//rotas dos pokemon indepentende
+//revisando
+</file>
+
+<file path="package.json">
+{
+  "name": "projeto-passo-a-passo",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "@prisma/client": "^6.19.3",
+    "cors": "^2.8.6",
+    "dotenv": "^18.0.5",
+    "express": "^5.2.1",
+    "node-cron": "^4.6.0",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.14",
+    "prisma": "^6.19.3"
+  }
+}
+</file>
+
+<file path="prisma.config.ts">
+// This file was generated by Prisma and assumes you have installed the following:
+// npm install --save-dev prisma dotenv
+import "dotenv/config";
+import { defineConfig, env } from "prisma/config";
+
+export default defineConfig({
+  schema: "prisma/schema.prisma",
+  migrations: {
+    path: "prisma/migrations",
+  },
+  engine: "classic",
+  datasource: {
+    url: env("DATABASE_URL"),
+  },
+});
+</file>
+
+</files>
