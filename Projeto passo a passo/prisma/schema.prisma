@@ -15,6 +15,7 @@ datasource db {
 model Vendedor {
   id     Int     @id @default(autoincrement()) // chave primária, cresce sozinha (1, 2, 3...)
   nome   String
+  meta   MetaVendedor? // meta deste vendedor (uma só)
   vendas Venda[] // lista de vendas deste vendedor (não é coluna, só navegação da relação)
 }
 
@@ -45,4 +46,12 @@ model Produto {
   nome       String
   quantidade Int // estoque atual (diminui a cada venda)
   itens      ItemVenda[] // vendas em que este produto apareceu (não é coluna)
+}
+
+// Meta de vendas de um vendedor
+model MetaVendedor {
+  id         Int      @id @default(autoincrement())
+  meta       Float // valor financeiro da meta
+  vendedorId Int      @unique // chave estrangeira (única: 1 meta por vendedor)
+  vendedor   Vendedor @relation(fields: [vendedorId], references: [id])
 }
