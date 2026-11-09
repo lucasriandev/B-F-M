@@ -8,4 +8,8 @@ print("Conexão feita!")
 
 df = pd.read_sql_query("SELECT * FROM Venda", conexão)
 print(df)
+
+agrupamento = df.groupby("vendedorId")["valor"].sum()
+print(agrupamento)
+
 conexão.close()
