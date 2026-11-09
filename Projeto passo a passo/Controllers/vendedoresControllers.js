@@ -14,6 +14,16 @@ const get = async (req, res) => {
   res.status(200).json({ detalhe: vendedores.length, dados: vendedores });
 };
 
+// GET /vendedores/metas -> lista vendedores com a meta gerada pelo motor.py
+const getMetas = async (req, res) => {
+  try {
+    const vendedores = await prisma.vendedor.findMany({ include: { meta: true } });
+    res.status(200).json({ detalhe: vendedores.length, dados: vendedores });
+  } catch (error) {
+    res.status(500).json({ Error: "Erro ao buscar metas" });
+  }
+};
+
 // POST /vendedores -> cria um vendedor novo
 const post = async (req, res) => {
   // Valida o body. Atenção: está fora do try, então se falhar o erro não é tratado aqui
@@ -37,5 +47,6 @@ const post = async (req, res) => {
 // Exporta as funções para as rotas usarem
 module.exports = {
   get,
+  getMetas,
   post,
 };

@@ -1,33 +1,32 @@
 import sqlite3
+from pathlib import Path
+
 import pandas as pd
 
-caminhoSql = "./prisma/dev.db"
-conexão = sqlite3.connect(caminhoSql)
+# Caminho absoluto baseado na pasta do script (funciona de qualquer diretório)
+caminhoSql = Path(__file__).parent / "prisma" / "dev.db"
+conexao = sqlite3.connect(caminhoSql)
 
-print("Conexão feita!")
+try:
+    df = pd.read_sql_query("SELECT * FROM Venda", conexao)
 
-df = pd.read_sql_query("SELECT * FROM Venda", conexão)
-print(df)
+    # Soma das vendas por vendedor e meta = total * 1.15
+    agrupamento = df.groupby("vendedorId")["valor"].sum()
+    metas = agrupamento * 1.15
+    print(metas)
 
-agrupamento = df.groupby("vendedorId")["valor"].sum()
-print(agrupamento)
+    cursor = conexao.cursor()
+    for vendedorId, meta in metas.items():
+        # UPSERT: vendedorId é UNIQUE, então rodar de novo atualiza em vez de dar erro
+        cursor.execute(
+            """
+            INSERT INTO MetaVendedor (meta, vendedorId) VALUES (?, ?)
+            ON CONFLICT(vendedorId) DO UPDATE SET meta = excluded.meta
+            """,
+            (float(meta), int(vendedorId)),
+        )
+    conexao.commit()
 
-metas = agrupamento * 1.15
-print(metas)
-
-cursor = conexão.cursor()
-
-for vendedorId, meta in metas.items():
-    print(vendedorId, meta)
-
-    cursor.execute(
-        "INSERT INTO MetaVendedor (meta, vendedorId) VALUES (?, ?)",
-        (float(meta), int(vendedorId))
-    )
-
-conexão.commit()
-
-resultado = pd.read_sql_query("SELECT * FROM MetaVendedor", conexão)
-print(resultado)
-
-conexão.close()
+    print(pd.read_sql_query("SELECT * FROM MetaVendedor", conexao))
+finally:
+    conexao.close()

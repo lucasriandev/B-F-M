@@ -9,5 +9,8 @@ router.post("/", vendedoresControllers.post);
 // GET /vendedores -> lista vendedores
 router.get("/", vendedoresControllers.get);
 
+// GET /vendedores/metas -> vendedores com metas (declarar antes de rotas com :id)
+router.get("/metas", vendedoresControllers.getMetas);
+
 // Exporta o router para o app.js registrar
 module.exports = router;

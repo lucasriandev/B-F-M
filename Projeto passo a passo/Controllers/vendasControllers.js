@@ -15,7 +15,7 @@ const vendaSchema = z.object({
       z.object({
         produtoId: z.number().int().positive(), // qual produto foi vendido
         quantidade: z.number().int().positive(), // quantas unidades
-      })
+      }),
     )
     .min(1, "A venda precisa ter ao menos um item!"), // não aceita lista vazia
 });
@@ -30,6 +30,12 @@ const get = async (req, res) => {
     include: { vendedor: true, itens: { include: { produto: true } } },
   });
 
+  const metas = await prisma.metaVendedor.findMany({
+    include: {
+      metaVendedor: true,
+    },
+  });
+
   // groupBy agrupa as vendas por mês e soma o campo valor de cada grupo
   // (usado para alimentar o gráfico de vendas por mês)
   const resultado = await prisma.venda.groupBy({
@@ -40,13 +46,12 @@ const get = async (req, res) => {
   });
 
   // Responde 200 (OK) com a quantidade, a lista e o total por mês
-  res
-    .status(200)
-    .json({
-      detalhe: todasVendas.length,
-      dados: todasVendas,
-      vendaPorMes: resultado,
-    });
+  res.status(200).json({
+    detalhe: todasVendas.length,
+    dados: todasVendas,
+    vendaPorMes: resultado,
+    metaVendedor: metas,
+  });
 };
 
 // POST /vendas -> cria uma venda nova e abate o estoque dos produtos
@@ -129,7 +134,7 @@ const post = async (req, res) => {
           where: { id: item.produtoId },
           // decrement subtrai direto no banco: estoque = estoque - quantidade
           data: { quantidade: { decrement: item.quantidade } },
-        })
+        }),
       ),
     ]);
 
