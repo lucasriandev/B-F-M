@@ -1,4 +1,4 @@
-
+﻿
 const { z } = require("zod");
 
 const prisma = require("../prisma");
@@ -46,58 +46,62 @@ const get = async (req, res) => {
   });
 };
 
+class ErroNegocio extends Error {
+  constructor(status, message) {
+    super(message);
+    this.status = status;
+  }
+}
+
 const post = async (req, res) => {
+  const parsed = vendaSchema.safeParse(req.body);
+
+  if (!parsed.success) {
+    return res.status(400).json({ error: "Dados invalidos", detalhes: parsed.error.issues });
+  }
+
+  const mensagemValidada = parsed.data;
+  const produtoIds = mensagemValidada.itens.map((item) => item.produtoId);
+
+  if (new Set(produtoIds).size !== produtoIds.length) {
+    return res
+      .status(400)
+      .json({ error: "Produto repetido na venda! Some as quantidades." });
+  }
+
   try {
+    // Tudo (checagens + baixa de estoque + criacao) roda numa unica transacao.
+    const novaVenda = await prisma.$transaction(async (tx) => {
+      const vendedor = await tx.vendedor.findUnique({
+        where: { id: mensagemValidada.vendedorId },
+      });
 
-    const mensagemValidada = vendaSchema.parse(req.body);
+      if (!vendedor) throw new ErroNegocio(404, "Vendedor nao existe!");
 
-    const vendedorExiste = await prisma.vendedor.findUnique({
-      where: { id: mensagemValidada.vendedorId },
-    });
-
-    if (!vendedorExiste) {
-      return res.status(404).json({ error: "Vendedor nao existe!" });
-    }
-
-    const produtoIds = mensagemValidada.itens.map((item) => item.produtoId);
-
-    if (new Set(produtoIds).size !== produtoIds.length) {
-      return res
-        .status(400)
-        .json({ error: "Produto repetido na venda! Some as quantidades." });
-    }
-
-    const produtosExistem = await prisma.produto.findMany({
-      where: {
-        id: {
-          in: produtoIds,
-        },
-      },
-    });
-
-    if (produtosExistem.length !== mensagemValidada.itens.length) {
-      return res.status(404).json({ error: "Um ou mais produtos nao existe!" });
-    }
-
-    for (const item of mensagemValidada.itens) {
-
-      const produto = produtosExistem.find((p) => p.id === item.produtoId);
-
-      if (produto.quantidade < item.quantidade) {
-        return res.status(400).json({
-          error: `Estoque insuficiente para ${produto.nome}! Disponivel: ${produto.quantidade}`,
+      for (const item of mensagemValidada.itens) {
+        // Baixa atomica: o WHERE garante estoque suficiente no momento da escrita.
+        const r = await tx.produto.updateMany({
+          where: { id: item.produtoId, quantidade: { gte: item.quantidade } },
+          data: { quantidade: { decrement: item.quantidade } },
         });
+
+        if (r.count === 0) {
+          const produto = await tx.produto.findUnique({ where: { id: item.produtoId } });
+
+          if (!produto) throw new ErroNegocio(404, "Um ou mais produtos nao existe!");
+
+          throw new ErroNegocio(
+            400,
+            `Estoque insuficiente para ${produto.nome}! Disponivel: ${produto.quantidade}`,
+          );
+        }
       }
-    }
 
-    const [novaVenda] = await prisma.$transaction([
-
-      prisma.venda.create({
+      return tx.venda.create({
         data: {
           valor: mensagemValidada.valor,
           mes: mensagemValidada.mes,
           vendedorId: mensagemValidada.vendedorId,
-
           itens: {
             create: mensagemValidada.itens.map((item) => ({
               produtoId: item.produtoId,
@@ -106,24 +110,19 @@ const post = async (req, res) => {
           },
         },
         include: { itens: true },
-      }),
+      });
+    });
 
-      ...mensagemValidada.itens.map((item) =>
-        prisma.produto.update({
-          where: { id: item.produtoId },
-
-          data: { quantidade: { decrement: item.quantidade } },
-        }),
-      ),
-    ]);
-
-    res
+    return res
       .status(201)
       .json({ detalhe: "Venda criada com sucesso", dados: novaVenda });
   } catch (error) {
-
-    return res.status(400).json({ error: "Erro ao criar venda" });
+    if (error instanceof ErroNegocio) {
+      return res.status(error.status).json({ error: error.message });
+    }
+    console.error(error);
+    return res.status(500).json({ error: "Erro ao criar venda" });
   }
 };
-
 module.exports = { get, post };
+
