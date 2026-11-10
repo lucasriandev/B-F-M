@@ -1,5 +1,4 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
 
 generator client {
   provider = "prisma-client-js"
@@ -10,48 +9,42 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// Exercício 1: gráfico de vendas
-// Vendedor: quem realiza as vendas
 model Vendedor {
-  id     Int     @id @default(autoincrement()) // chave primária, cresce sozinha (1, 2, 3...)
+  id     Int     @id @default(autoincrement())
   nome   String
-  meta   MetaVendedor? // meta deste vendedor (uma só)
-  vendas Venda[] // lista de vendas deste vendedor (não é coluna, só navegação da relação)
+  meta   MetaVendedor?
+  vendas Venda[]
 }
 
-// Venda: uma venda feita por UM vendedor, com vários itens
 model Venda {
   id         Int      @id @default(autoincrement())
-  valor      Float // valor total da venda
-  mes        String // mês em que ocorreu (usado no gráfico)
-  vendedorId Int // coluna real no banco: id do vendedor (chave estrangeira)
-  // relação: liga vendedorId ao id da tabela Vendedor
+  valor      Float
+  mes        String
+  vendedorId Int
+
   vendedor   Vendedor @relation(fields: [vendedorId], references: [id])
-  itens      ItemVenda[] // lista de itens desta venda (não é coluna)
+  itens      ItemVenda[]
 }
 
-// Tabela intermediária: liga uma Venda a vários Produtos
 model ItemVenda {
   id         Int     @id @default(autoincrement())
-  quantidade Int // quantas unidades deste produto foram vendidas
-  vendaId    Int // chave estrangeira: de qual venda é este item
-  produtoId  Int // chave estrangeira: qual produto foi vendido
+  quantidade Int
+  vendaId    Int
+  produtoId  Int
   venda      Venda   @relation(fields: [vendaId], references: [id])
   produto    Produto @relation(fields: [produtoId], references: [id])
 }
 
-// Exercício 3: vigia de estoque
 model Produto {
   id         Int    @id @default(autoincrement())
   nome       String
-  quantidade Int // estoque atual (diminui a cada venda)
-  itens      ItemVenda[] // vendas em que este produto apareceu (não é coluna)
+  quantidade Int
+  itens      ItemVenda[]
 }
 
-// Meta de vendas de um vendedor
 model MetaVendedor {
   id         Int      @id @default(autoincrement())
-  meta       Float // valor financeiro da meta
-  vendedorId Int      @unique // chave estrangeira (única: 1 meta por vendedor)
+  meta       Float
+  vendedorId Int      @unique
   vendedor   Vendedor @relation(fields: [vendedorId], references: [id])
 }

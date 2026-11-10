@@ -15,7 +15,6 @@ const get = async (req, res) => {
       })
     )
 
-
     res.status(200).json({ dados: filtro });
   } catch (error) {
     res.status(404).json({ error: "pokemon nao encontrado!" });
